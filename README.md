@@ -1,0 +1,1 @@
+La aplicación tiene como objetivo guiar al usuario desde cualquier ubicación actual hasta la dirección configurada como “casa”. Utiliza librerías de mapas y servicios de geolocalización para mostrar en pantalla la ruta óptima en tiempo real.
