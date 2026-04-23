@@ -2,14 +2,14 @@ package com.example.maps.api
 
 import com.example.maps.model.RouteResponse
 import retrofit2.http.GET
-import retrofit2.http.Header
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface OpenRouteService {
-    @GET("v2/directions/driving-car")
+    @GET("route/v1/driving/{coords}")
     suspend fun getDirections(
-        @Query("start") start: String,
-        @Query("end") end: String,
-        @Header("Authorization") apiKey: String
+        @Path("coords") coords: String, // "lon1,lat1;lon2,lat2"
+        @Query("overview") overview: String = "full",
+        @Query("geometries") geometries: String = "geojson"
     ): RouteResponse
 }

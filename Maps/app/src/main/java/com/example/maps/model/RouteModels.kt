@@ -1,10 +1,10 @@
 package com.example.maps.model
 
 data class RouteResponse(
-    val features: List<Feature>
+    val routes: List<Route>
 )
 
-data class Feature(
+data class Route(
     val geometry: Geometry
 )
 

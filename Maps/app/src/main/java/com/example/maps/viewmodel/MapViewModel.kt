@@ -2,6 +2,7 @@ package com.example.maps.viewmodel
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -11,6 +12,8 @@ import com.example.maps.api.OpenRouteService
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
 import org.osmdroid.util.GeoPoint
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -18,9 +21,17 @@ import retrofit2.converter.gson.GsonConverterFactory
 class MapViewModel : ViewModel() {
 
     private val api: OpenRouteService by lazy {
+        val logging = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BODY
+        }
+        val client = OkHttpClient.Builder()
+            .addInterceptor(logging)
+            .build()
+
         Retrofit.Builder()
-            .baseUrl("https://api.openrouteservice.org/")
+            .baseUrl("https://router.project-osrm.org/")
             .addConverterFactory(GsonConverterFactory.create())
+            .client(client)
             .build()
             .create(OpenRouteService::class.java)
     }
@@ -48,11 +59,13 @@ class MapViewModel : ViewModel() {
         homeLocation = GeoPoint(lat, lon)
         val prefs = context.getSharedPreferences("map_prefs", Context.MODE_PRIVATE)
         prefs.edit().putFloat("home_lat", lat.toFloat()).putFloat("home_lon", lon.toFloat()).apply()
+        errorMessage = "Destino actualizado."
         fetchRoute()
     }
 
     @SuppressLint("MissingPermission")
     fun updateLocation(context: Context) {
+        errorMessage = "Obteniendo ubicación..."
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
         fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
             .addOnSuccessListener { location ->
@@ -60,40 +73,41 @@ class MapViewModel : ViewModel() {
                     currentLocation = GeoPoint(location.latitude, location.longitude)
                     fetchRoute()
                 } else {
-                    errorMessage = "No se pudo obtener la ubicación actual. Asegúrate de tener el GPS encendido."
+                    errorMessage = "Error de GPS. Verifica que esté encendido."
                 }
             }
             .addOnFailureListener {
-                errorMessage = "Error al obtener ubicación: ${it.message}"
+                errorMessage = "Error de ubicación: ${it.message}"
             }
     }
 
     private fun fetchRoute() {
-        val start = currentLocation ?: return
+        val start = currentLocation
+        if (start == null) {
+            errorMessage = "Usa 'Trazar Ruta' para iniciar."
+            return
+        }
         val end = homeLocation
         
         viewModelScope.launch {
             try {
-                val apiKey = "5b3ce3597851110001cf6248c8948705977a493f8e539958992e276b"
-                val response = api.getDirections(
-                    start = "${start.longitude},${start.latitude}",
-                    end = "${end.longitude},${end.latitude}",
-                    apiKey = apiKey
-                )
+                val coords = "${start.longitude},${start.latitude};${end.longitude},${end.latitude}"
+                val response = api.getDirections(coords = coords)
                 
-                val points = response.features.firstOrNull()?.geometry?.coordinates?.map {
+                val points = response.routes.firstOrNull()?.geometry?.coordinates?.map {
                     GeoPoint(it[1], it[0])
                 } ?: emptyList()
                 
                 if (points.isEmpty()) {
-                    errorMessage = "No se encontró una ruta válida."
+                    errorMessage = "No se encontró una ruta por carretera."
                 } else {
                     routePoints = points
                     errorMessage = null
                 }
                 
             } catch (e: Exception) {
-                errorMessage = "Error al obtener la ruta: ${e.message}"
+                Log.e("MapViewModel", "Error fetching route", e)
+                errorMessage = "Error de conexión: Verifica tu internet."
             }
         }
     }
